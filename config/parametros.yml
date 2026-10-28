@@ -1,0 +1,32 @@
+# Parámetros del proyecto y de los modelos.
+
+proyecto:
+  nombre: datos_masivos
+  plataforma: Raspberry Pi 5
+  ram_gb: 16
+  arquitectura: arm64
+  sistema_operativo: Raspberry Pi OS Lite 64-bit
+
+datos:
+  ruta_crudos: assets/datos/crudos.csv
+  ruta_limpios: assets/datos/limpios.parquet
+  columna_objetivo: objetivo
+  anonimizar_antes_de_automatizar: true    # anexo de ética, punto 2
+
+modelo:
+  algoritmo: RandomForestClassifier
+  n_estimators: 300
+  semilla: 42
+  test_size: 0.2
+  validacion_manual_requerida: true        # anexo de ética, punto 4
+
+monitoreo:
+  intervalo_scrape_segundos: 30
+  umbral_psi_deriva: 0.1
+  temperatura_maxima_c: 80
+
+limites_recursos:
+  jupyter: { cpu: 2.0, memoria: 4g }
+  api:     { cpu: 1.5, memoria: 2g }
+  ollama:  { cpu: 3.0, memoria: 6g }
+  db:      { cpu: 1.0, memoria: 2g }

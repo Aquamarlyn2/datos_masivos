@@ -1,0 +1,26 @@
+{
+  "modelo": "modelo_rf",
+  "algoritmo": "RandomForestClassifier",
+  "hiperparametros": {
+    "n_estimators": 300,
+    "max_depth": null,
+    "random_state": 42,
+    "n_jobs": -1
+  },
+  "entrenamiento": {
+    "fecha": "2026-10-27",
+    "dataset": "assets/datos/limpios.parquet",
+    "test_size": 0.2,
+    "estratificado": true
+  },
+  "metricas": {
+    "f1_macro": null,
+    "exactitud": null,
+    "nota": "Se completan al ejecutar pipelines/entrenamiento_pipeline.py"
+  },
+  "validacion_humana": {
+    "requerida": true,
+    "responsable": null,
+    "estado": "pendiente"
+  }
+}

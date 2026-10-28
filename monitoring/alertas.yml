@@ -1,0 +1,30 @@
+groups:
+  - name: datos-masivos
+    rules:
+      - alert: ServicioCaido
+        expr: up == 0
+        for: 2m
+        labels: { severity: critica }
+        annotations:
+          summary: "El servicio {{ $labels.job }} no responde"
+
+      - alert: MemoriaAlta
+        expr: container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.85
+        for: 5m
+        labels: { severity: advertencia }
+        annotations:
+          summary: "El contenedor {{ $labels.name }} supera el 85% de su límite de memoria"
+
+      - alert: LatenciaInferenciaAlta
+        expr: histogram_quantile(0.95, rate(dm_latencia_segundos_bucket[5m])) > 1.5
+        for: 5m
+        labels: { severity: advertencia }
+        annotations:
+          summary: "La latencia p95 de inferencia supera 1.5 s"
+
+      - alert: TemperaturaCritica
+        expr: node_thermal_zone_temp > 80
+        for: 5m
+        labels: { severity: critica }
+        annotations:
+          summary: "La temperatura del Pi supera 80 °C; riesgo de throttling"

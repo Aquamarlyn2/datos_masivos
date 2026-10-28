@@ -1,0 +1,33 @@
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  detallado:
+    format: "%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d | %(message)s"
+    datefmt: "%Y-%m-%d %H:%M:%S"
+  simple:
+    format: "%(asctime)s | %(levelname)-8s | %(message)s"
+
+handlers:
+  consola:
+    class: logging.StreamHandler
+    formatter: simple
+    stream: ext://sys.stdout
+
+  archivo:
+    class: logging.handlers.RotatingFileHandler
+    formatter: detallado
+    filename: config/logs/datos_masivos.log
+    maxBytes: 10485760      # 10 MB
+    backupCount: 5
+    encoding: utf-8
+
+loggers:
+  dm:
+    level: INFO
+    handlers: [consola, archivo]
+    propagate: false
+
+root:
+  level: WARNING
+  handlers: [consola]

@@ -1,0 +1,9 @@
+# Dependencias de desarrollo (no van a la imagen de producción)
+pytest==8.3.3
+pytest-cov==6.0.0
+ruff==0.7.1
+jupyterlab==4.2.5
+matplotlib==3.9.2
+seaborn==0.13.2
+pip-audit==2.7.3
+pre-commit==4.0.1

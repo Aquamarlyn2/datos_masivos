@@ -1,0 +1,231 @@
+# Pila de microservicios de ciencia de datos y agentes inteligentes
+# Plataforma: Raspberry Pi 5 (16 GB) — linux/arm64
+# Uso:  docker compose -f deployment/docker-compose.yml up -d
+#
+# Nota de seguridad (ver docs/seguridad.md):
+#   - Ningún servicio corre en modo privilegiado
+#   - Se descartan TODAS las capacidades y se añaden solo las necesarias
+#   - Límites de CPU/memoria en todos los servicios
+#   - Secretos en deployment/.env (fuera del control de versiones)
+
+name: datos-masivos
+
+services:
+
+  # ------------------------------------------------------------
+  # Ciencia de datos: exploración, preprocesamiento y entrenamiento
+  # ------------------------------------------------------------
+  jupyter:
+    image: quay.io/jupyter/scipy-notebook:latest   # publica linux/arm64
+    container_name: dm-jupyter
+    restart: unless-stopped
+    user: "1000"
+    ports:
+      - "8888:8888"
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN:?definir en .env}
+    volumes:
+      - ../notebooks:/home/jovyan/work:rw
+      - ../models:/home/jovyan/models:ro
+    networks: [app, data]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4g
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # ------------------------------------------------------------
+  # API de inferencia de modelos (ciencia de datos en producción)
+  # ------------------------------------------------------------
+  api:
+    build:
+      context: ..
+      dockerfile: deployment/api/Dockerfile
+    image: dm-api:latest
+    container_name: dm-api
+    restart: unless-stopped
+    user: "1000:1000"
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://dm_user:${POSTGRES_PASSWORD:?definir en .env}@db:5432/datos_masivos
+      OLLAMA_HOST: http://ollama:11434
+      LOG_LEVEL: info
+    volumes:
+      - ../models:/app/models:ro
+      - ../config:/app/config:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [app, data, ia]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 2g
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # ------------------------------------------------------------
+  # Agentes computacionales inteligentes: LLM local
+  # ------------------------------------------------------------
+  ollama:
+    image: ollama/ollama:latest                    # publica linux/arm64
+    container_name: dm-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    networks: [ia]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    deploy:
+      resources:
+        limits:
+          cpus: "3.0"
+          memory: 6g
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # ------------------------------------------------------------
+  # Persistencia
+  # ------------------------------------------------------------
+  db:
+    image: postgres:16-alpine                      # publica linux/arm64
+    container_name: dm-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: datos_masivos
+      POSTGRES_USER: dm_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definir en .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    networks: [data]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_READ_SEARCH, FOWNER, SETGID, SETUID]
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dm_user -d datos_masivos"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------------------------------------
+  # Front-end (Webpack)
+  # ------------------------------------------------------------
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    image: dm-frontend:latest
+    container_name: dm-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    networks: [edge, app]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=32m
+      - /var/run:size=8m
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
+
+  # ------------------------------------------------------------
+  # Observabilidad
+  # ------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: dm-prometheus
+    restart: unless-stopped
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    networks: [observabilidad]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: dm-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?definir en .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafanadata:/var/lib/grafana
+    networks: [observabilidad, edge]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+
+# ------------------------------------------------------------
+# Redes aisladas por dominio: si un servicio se compromete,
+# el movimiento lateral queda contenido.
+# ------------------------------------------------------------
+networks:
+  edge:
+    driver: bridge
+  app:
+    driver: bridge
+  ia:
+    driver: bridge
+    internal: true      # sin salida a Internet
+  data:
+    driver: bridge
+    internal: true
+  observabilidad:
+    driver: bridge
+
+volumes:
+  pgdata:
+  ollama_models:
+  promdata:
+  grafanadata:
